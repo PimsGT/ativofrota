@@ -1,0 +1,44 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function userDoc() { return get(/databases/$(database)/documents/users/$(request.auth.uid)); }
+    function roleIs(role) { return signedIn() && userDoc().data.role == role; }
+    function canWrite() { return signedIn() && (userDoc().data.role in ['admin', 'patrimonial']); }
+    function canAudit() { return signedIn() && (userDoc().data.role in ['admin', 'patrimonial', 'auditor']); }
+
+    match /companies/{companyId} {
+      allow read: if signedIn();
+      allow write: if roleIs('admin');
+    }
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || roleIs('admin'));
+      allow write: if roleIs('admin');
+    }
+    match /assets/{assetId} {
+      allow read: if signedIn();
+      allow create, update: if canWrite();
+      allow delete: if roleIs('admin');
+      match /documents/{documentId} {
+        allow read: if signedIn();
+        allow create, update: if canWrite();
+        allow delete: if roleIs('admin');
+      }
+      match /photos/{photoId} {
+        allow read: if signedIn();
+        allow create, update: if canWrite();
+        allow delete: if roleIs('admin');
+      }
+    }
+    match /transfers/{transferId} {
+      allow read: if signedIn();
+      allow create: if canWrite();
+      allow update, delete: if roleIs('admin');
+    }
+    match /assetHistory/{historyId} {
+      allow read: if canAudit();
+      allow create: if canWrite();
+      allow update, delete: if false;
+    }
+  }
+}

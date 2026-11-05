@@ -1,0 +1,9 @@
+src/firebase-config.js
+src/supabase-config.js
+.env
+node_modules/
+.DS_Store
+.work/
+assets-import.csv
+notas-fiscais-manifest.csv
+subir app frota.txt

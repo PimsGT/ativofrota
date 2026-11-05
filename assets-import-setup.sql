@@ -1,0 +1,10 @@
+alter table public.assets alter column company_id drop not null;
+alter table public.assets add column if not exists raw_company_name text, add column if not exists classification_status text not null default 'pendente' check (classification_status in ('classificado','pendente','revisar'));
+create table if not exists public.assets_import (legacy_id text primary key, name text not null, category text, brand text, model text, year text, company_name text, nf_number text, issue_serial text, operational_location text, chassis text, source_sheet text, source_row text, imported_at timestamptz not null default now());
+alter table public.assets_import enable row level security;
+drop policy if exists "Administradores gerenciam carga de ativos" on public.assets_import;
+create policy "Administradores gerenciam carga de ativos" on public.assets_import for all to authenticated using (exists (select 1 from public.profiles p where p.id=auth.uid() and p.role='admin')) with check (exists (select 1 from public.profiles p where p.id=auth.uid() and p.role='admin'));
+drop policy if exists "Administradores podem visualizar ativos pendentes" on public.assets;
+create policy "Administradores podem visualizar ativos pendentes" on public.assets for select to authenticated using (exists (select 1 from public.profiles p where p.id=auth.uid() and p.role='admin') or exists (select 1 from public.user_companies uc where uc.user_id=auth.uid() and uc.company_id=assets.company_id));
+drop policy if exists "Administradores gerenciam todos os ativos" on public.assets;
+create policy "Administradores gerenciam todos os ativos" on public.assets for all to authenticated using (exists (select 1 from public.profiles p where p.id=auth.uid() and p.role='admin')) with check (exists (select 1 from public.profiles p where p.id=auth.uid() and p.role='admin'));

@@ -1,0 +1,30 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() { return request.auth != null; }
+    function userDoc() { return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)); }
+    function canWrite() { return signedIn() && (userDoc().data.role in ['admin', 'patrimonial']); }
+
+    match /assets/{assetId}/documents/{fileName} {
+      allow read: if signedIn();
+      allow write: if canWrite()
+        && request.resource.size < 25 * 1024 * 1024
+        && request.resource.contentType.matches('application/pdf|image/.*');
+      allow delete: if signedIn() && userDoc().data.role == 'admin';
+    }
+    match /assets/{assetId}/photos/{fileName} {
+      allow read: if signedIn();
+      allow write: if canWrite()
+        && request.resource.size < 15 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if signedIn() && userDoc().data.role == 'admin';
+    }
+    match /reference-images/{fileName} {
+      allow read: if signedIn();
+      allow write: if canWrite() && request.resource.contentType.matches('image/.*');
+    }
+    match /imports/{batchId}/original/{fileName} {
+      allow read, write: if canWrite();
+    }
+  }
+}
