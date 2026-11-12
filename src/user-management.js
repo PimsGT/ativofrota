@@ -131,6 +131,14 @@ userForm?.addEventListener("submit", async (event) => {
 
 document.addEventListener("ativofrota:authenticated", (event) => loadProfile(event.detail));
 
+supabase.auth.onAuthStateChange((_event, session) => {
+  if (!session) {
+    currentProfile = null;
+    loadedUserId = null;
+    usersNav?.classList.add("hidden");
+  }
+});
+
 // Também verifica a sessão atual. Isso evita perder o carregamento do perfil
 // quando o navegador já tinha uma sessão persistida antes deste módulo iniciar.
 supabase.auth.getSession()

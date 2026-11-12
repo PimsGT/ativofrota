@@ -5,6 +5,7 @@ const form = document.querySelector("#loginForm");
 const error = document.querySelector("#authError");
 const submitButton = form?.querySelector('button[type="submit"]');
 const dashboard = document.querySelector("#dashboardView");
+const logoutButton = document.querySelector("#logoutBtn");
 
 function setError(message = "") {
   if (error) error.textContent = message;
@@ -41,6 +42,18 @@ async function restoreSession() {
 
 restoreSession();
 supabase.auth.onAuthStateChange((_event, session) => showSession(session));
+
+logoutButton?.addEventListener("click", async () => {
+  logoutButton.disabled = true;
+  logoutButton.textContent = "Saindo...";
+  const { error: logoutError } = await supabase.auth.signOut();
+  if (logoutError) {
+    console.error("Falha ao encerrar sessão:", logoutError);
+    logoutButton.disabled = false;
+    logoutButton.textContent = "Sair";
+    setError("Não foi possível encerrar a sessão. Tente novamente.");
+  }
+});
 
 form?.addEventListener("submit", async (event) => {
   event.preventDefault();
