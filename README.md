@@ -85,3 +85,34 @@ O dashboard agora terá um painel de idade estimada. Ele apresenta a idade médi
 A URL base configurada para o projeto é `https://cryalcfhvoyyxijlorja.supabase.co`. O trecho `/rest/v1/` não deve ser usado como URL principal do cliente; ele é apenas o caminho da API REST. A chave usada é uma chave pública `sb_publishable_`, adequada para o frontend quando as políticas RLS estão configuradas.
 
 Nunca colocar no frontend a senha do banco, `service_role`, secret key ou qualquer token administrativo. A configuração local está em `src/supabase-config.js` e o modelo sem credenciais está em `src/supabase-config.example.js`.
+
+
+## Controle de usuários pelo Master
+
+O controle de acesso usa o Supabase Auth e a tabela `public.profiles`, com apenas dois perfis: `master` e `patrimonial`. O perfil Master pode abrir **Usuários e acessos** e criar uma conta com senha provisória. A conta é criada por uma Edge Function protegida; a chave `service_role` não é enviada ao navegador. No primeiro login, o usuário fica bloqueado pelo modal de troca de senha até definir uma nova senha.
+
+### Implantação inicial
+
+1. No Supabase SQL Editor, execute `supabase-user-access.sql`.
+2. Crie ou confirme o primeiro usuário Master em **Authentication > Users** no Supabase.
+3. Copie o UUID desse usuário e execute no SQL Editor:
+
+```sql
+insert into public.profiles (id, display_name, role, must_change_password, active)
+values ('UUID_DO_USUARIO_MASTER', 'Leonardo Aguiar', 'master', false, true)
+on conflict (id) do update set role = 'master', must_change_password = false, active = true;
+```
+
+4. Com o Supabase CLI autenticado e vinculado ao projeto, publique a função:
+
+```powershell
+supabase login
+supabase link --project-ref cryalcfhvoyyxijlorja
+supabase functions deploy admin-create-user
+```
+
+A função usa automaticamente `SUPABASE_URL`, `SUPABASE_ANON_KEY` e `SUPABASE_SERVICE_ROLE_KEY` no ambiente seguro do Supabase. Nunca copie a `service_role` para `src`, `index.html` ou qualquer arquivo publicado.
+
+### Uso no app
+
+Depois de entrar como Master, abra **Usuários** no menu lateral, informe nome, e-mail, perfil e senha provisória com pelo menos oito caracteres. Entregue a senha provisória por um canal seguro. O usuário Patrimonial poderá acessar as rotinas operacionais, mas não verá a administração de usuários. No primeiro login, o app exigirá a definição de uma nova senha antes de liberar o dashboard.
