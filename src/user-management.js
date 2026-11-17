@@ -37,10 +37,24 @@ async function loadProfile(user) {
     .eq("id", user.id)
     .maybeSingle();
 
-  if (error || !data || !data.active) {
+  if (error) {
     loadedUserId = null;
-    toast("Seu perfil não está ativo. Fale com o usuário Master.");
-    await supabase.auth.signOut();
+    console.error("Falha ao carregar o perfil do usuário:", error);
+    toast("Não foi possível carregar seu perfil. Verifique as políticas do Supabase.");
+    return;
+  }
+
+  if (!data) {
+    loadedUserId = null;
+    usersNav?.classList.add("hidden");
+    toast("Seu usuário ainda não possui um perfil no AtivoFrota.");
+    return;
+  }
+
+  if (!data.active) {
+    loadedUserId = null;
+    usersNav?.classList.add("hidden");
+    toast("Seu perfil está inativo. Fale com o usuário Master.");
     return;
   }
 
