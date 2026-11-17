@@ -6,6 +6,7 @@ const error = document.querySelector("#authError");
 const submitButton = form?.querySelector('button[type="submit"]');
 const dashboard = document.querySelector("#dashboardView");
 const logoutButton = document.querySelector("#logoutBtn");
+let sessionResolved = false;
 
 function setError(message = "") {
   if (error) error.textContent = message;
@@ -32,16 +33,23 @@ async function restoreSession() {
   try {
     const { data, error: sessionError } = await supabase.auth.getSession();
     if (sessionError) throw sessionError;
+    sessionResolved = true;
     showSession(data?.session ?? null);
   } catch (sessionError) {
-    showSession(null);
+    sessionResolved = true;
     setError("Não foi possível verificar a sessão. Atualize a página e tente novamente.");
     console.error("Falha ao restaurar sessão do Supabase:", sessionError);
   }
 }
 
 restoreSession();
-supabase.auth.onAuthStateChange((_event, session) => showSession(session));
+supabase.auth.onAuthStateChange((event, session) => {
+  if (session) {
+    showSession(session);
+    return;
+  }
+  if (event === "SIGNED_OUT" && sessionResolved) showSession(null);
+});
 
 logoutButton?.addEventListener("click", async () => {
   logoutButton.disabled = true;
