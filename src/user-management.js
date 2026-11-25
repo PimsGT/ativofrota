@@ -89,7 +89,7 @@ async function loadUsers() {
   try {
     const { users } = await invokeAdmin({ action: "list" });
     userTable.innerHTML = (users || []).map((profile) => `<tr>
-      <td>${esc(profile.display_name)}<small class="muted">${esc(profile.email)}</small></td>
+      <td>${esc(profile.display_name)}<small class="user-email">${esc(profile.email)}</small></td>
       <td>${profile.role === "master" ? "Master" : "Patrimonial"}</td>
       <td><span class="status-pill ${profile.active ? "green" : "red"}">${profile.active ? "Ativo" : "Inativo"}</span></td>
       <td>${profile.must_change_password ? "Sim" : "Não"}</td>
