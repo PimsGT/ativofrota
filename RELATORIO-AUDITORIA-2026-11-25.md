@@ -195,3 +195,8 @@ Foi tentado um smoke test HTTP alternativo com Python e Node, mas os processos s
 ## Correção do card de ativos sem classificação
 
 Foi identificado que o Supabase carregava ativos sem empresa com o rótulo `SEM CLASSIFICACAO` (sem acento), enquanto o dashboard filtrava pelo rótulo `SEM CLASSIFICAÇÃO` (com acento). Por isso, os 205 ativos sem empresa apareciam na base, mas o card mostrava zero. O fallback do carregamento remoto em `src/app.js` foi padronizado para `SEM CLASSIFICAÇÃO`; a sintaxe do arquivo foi validada novamente com `node --check`.
+
+
+## Segunda correção do card sem classificação
+
+A primeira correção padronizou o texto, mas a causa também podia ocorrer quando `raw_company_name` continha um rótulo legado. O mapeamento remoto foi reforçado: o frontend agora considera um ativo como `SEM CLASSIFICAÇÃO` sempre que `company_id` e `current_company_id` são nulos, ignorando nomes textuais legados. `src/app.js` passou novamente no `node --check`.
