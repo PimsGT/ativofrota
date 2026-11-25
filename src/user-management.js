@@ -12,6 +12,7 @@ const userTable = $("#userTable");
 const esc = (value) => { const el = document.createElement("div"); el.textContent = value ?? ""; return el.innerHTML; };
 let currentProfile = null;
 let loadedUserId = null;
+let availableCompanies = [];
 
 function toast(message) {
   const element = $("#toast");
@@ -87,14 +88,18 @@ async function invokeAdmin(payload) {
 async function loadUsers() {
   if (currentProfile?.role !== "master" || !userTable) return;
   try {
-    const { users } = await invokeAdmin({ action: "list" });
+    const { users, companies } = await invokeAdmin({ action: "list" });
+    availableCompanies = companies || [];
+    const companyOptions = availableCompanies.map((company) => `<label class="company-option"><input type="checkbox" name="companyIds" value="${esc(company.id)}">${esc(company.name)}</label>`).join("");
+    const companyBox = $("#userCompanyOptions");
+    if (companyBox) companyBox.innerHTML = companyOptions || '<span class="muted">Nenhuma empresa cadastrada.</span>';
     userTable.innerHTML = (users || []).map((profile) => `<tr>
       <td>${esc(profile.display_name)}<small class="user-email">${esc(profile.email)}</small></td>
       <td>${profile.role === "master" ? "Master" : "Patrimonial"}</td>
       <td><span class="status-pill ${profile.active ? "green" : "red"}">${profile.active ? "Ativo" : "Inativo"}</span></td>
       <td>${profile.must_change_password ? "Sim" : "Não"}</td>
       <td>${new Date(profile.created_at).toLocaleDateString("pt-BR")}</td>
-      <td>${profile.id === currentProfile.id ? "—" : `<button class="text-btn reset-user-password" type="button" data-user-id="${esc(profile.id)}" data-user-name="${esc(profile.display_name)}">Definir senha</button>`}</td>
+      <td>${profile.id === currentProfile.id ? "—" : `<button class="text-btn reset-user-password" type="button" data-user-id="${esc(profile.id)}" data-user-name="${esc(profile.display_name)}">Definir senha</button><div class="user-company-editor" data-user-id="${esc(profile.id)}">${profile.role === "patrimonial" ? availableCompanies.map((company) => `<label class="company-option"><input type="checkbox" value="${esc(company.id)}" ${profile.companyIds?.includes(company.id) ? "checked" : ""}>${esc(company.name)}</label>`).join("") + `<button class="text-btn save-user-access" type="button">Salvar empresas</button>` : "Todas as empresas"}</div>`}</td>
     </tr>`).join("") || `<tr><td colspan="6">Nenhum usuário cadastrado.</td></tr>`;
   } catch (error) {
     console.error("Falha ao carregar usuários:", error);
@@ -102,6 +107,16 @@ async function loadUsers() {
   }
 }
 userTable?.addEventListener("click", async (event) => {
+  const saveButton = event.target.closest(".save-user-access");
+  if (saveButton) {
+    const editor = saveButton.closest(".user-company-editor");
+    const companyIds = [...editor.querySelectorAll("input[type=checkbox]:checked")].map((input) => input.value);
+    saveButton.disabled = true;
+    try { await invokeAdmin({ action: "update-access", userId: editor.dataset.userId, companyIds }); toast("Empresas autorizadas atualizadas."); await loadUsers(); }
+    catch (error) { toast(error.message); saveButton.disabled = false; }
+    return;
+  }
+
   const button = event.target.closest(".reset-user-password");
   if (!button) return;
   const name = button.dataset.userName || "usuário";
@@ -159,6 +174,7 @@ userForm?.addEventListener("submit", async (event) => {
 
   const formData = new FormData(userForm);
   const payload = Object.fromEntries(formData.entries());
+  payload.companyIds = formData.getAll("companyIds");
   let data;
   try {
     data = await invokeAdmin(payload);

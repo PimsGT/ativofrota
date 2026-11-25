@@ -41,7 +41,7 @@ Deno.serve(async (request) => {
     return response({ error: "Apenas usuários Master podem criar contas." }, 403);
   }
 
-  let payload: { action?: string; userId?: string; displayName?: string; email?: string; role?: string; temporaryPassword?: string };
+  let payload: { action?: string; userId?: string; displayName?: string; email?: string; role?: string; temporaryPassword?: string; companyIds?: string[] };
   try {
     payload = await request.json();
   } catch {
@@ -50,12 +50,28 @@ Deno.serve(async (request) => {
 
   if (payload.action === "list") {
     const [{ data: profiles, error: profilesError }, { data: authUsers, error: authUsersError }] = await Promise.all([
-      admin.from("profiles").select("id, display_name, role, must_change_password, active, created_at").order("created_at", { ascending: false }),
+      admin.from("profiles").select("id, display_name, role, must_change_password, active, created_at, user_companies(company_id)").order("created_at", { ascending: false }),
       admin.auth.admin.listUsers({ page: 1, perPage: 1000 }),
     ]);
     if (profilesError || authUsersError) return response({ error: "Não foi possível carregar os usuários." }, 500);
     const emails = new Map((authUsers?.users ?? []).map((user) => [user.id, user.email ?? ""]));
-    return response({ users: (profiles ?? []).map((profile) => ({ ...profile, email: emails.get(profile.id) ?? "" })) });
+    const { data: companies, error: companiesError } = await admin.from("companies").select("id, name").order("name");
+    if (companiesError) return response({ error: "Não foi possível carregar as empresas." }, 500);
+    return response({ users: (profiles ?? []).map((profile) => ({ ...profile, email: emails.get(profile.id) ?? "", companyIds: (profile.user_companies ?? []).map((link) => link.company_id) })), companies: companies ?? [] });
+  }
+
+  if (payload.action === "update-access") {
+    const userId = payload.userId?.trim() ?? "";
+    if (!userId || userId === caller.id) return response({ error: "Usuário inválido para alteração de acesso." }, 400);
+    const { data: target } = await admin.from("profiles").select("id, role").eq("id", userId).maybeSingle();
+    if (!target) return response({ error: "Usuário não encontrado." }, 404);
+    const companyIds = [...new Set((payload.companyIds ?? []).filter(Boolean))];
+    await admin.from("user_companies").delete().eq("user_id", userId);
+    if (target.role === "patrimonial" && companyIds.length) {
+      const { error } = await admin.from("user_companies").insert(companyIds.map((company_id) => ({ user_id: userId, company_id })));
+      if (error) return response({ error: "Não foi possível salvar os vínculos de empresa." }, 500);
+    }
+    return response({ ok: true });
   }
 
   if (payload.action === "reset-password") {
@@ -75,11 +91,13 @@ Deno.serve(async (request) => {
   const email = payload.email?.trim().toLowerCase() ?? "";
   const role = payload.role === "master" ? "master" : payload.role === "patrimonial" ? "patrimonial" : "";
   const temporaryPassword = payload.temporaryPassword ?? "";
+  const companyIds = [...new Set((payload.companyIds ?? []).filter(Boolean))];
 
   if (!displayName || !email || !role || temporaryPassword.length < 8) {
     return response({ error: "Informe nome, e-mail, perfil e uma senha provisória com pelo menos 8 caracteres." }, 400);
   }
 
+  if (role === "patrimonial" && !companyIds.length) return response({ error: "Selecione pelo menos uma empresa para o usuário Patrimonial." }, 400);
   const { data: created, error: createError } = await admin.auth.admin.createUser({
     email,
     password: temporaryPassword,
@@ -105,6 +123,14 @@ Deno.serve(async (request) => {
     return response({ error: "A conta foi revertida porque o perfil não pôde ser criado." }, 500);
   }
 
+  if (role === "patrimonial" && companyIds.length) {
+    const { error: linkError } = await admin.from("user_companies").insert(companyIds.map((company_id) => ({ user_id: created.user.id, company_id })));
+    if (linkError) {
+      await admin.from("profiles").delete().eq("id", created.user.id);
+      await admin.auth.admin.deleteUser(created.user.id);
+      return response({ error: "A conta foi revertida porque os vínculos de empresa não puderam ser criados." }, 500);
+    }
+  }
   return response({
     user: {
       id: created.user.id,
