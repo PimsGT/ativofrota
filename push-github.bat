@@ -97,7 +97,11 @@ echo Commit que sera criado:
 echo %COMMIT_MESSAGE%
 echo.
 set "CONFIRM="
-set /p "CONFIRM=Criar commit e enviar para o GitHub? Digite S ou N e pressione Enter: "
+if /I "%~2"=="/S" (
+    set "CONFIRM=S"
+) else (
+    set /p "CONFIRM=Criar commit e enviar para o GitHub? Digite S ou N e pressione Enter: "
+)
 if /I not "%CONFIRM%"=="S" (
     echo Operacao cancelada. Nenhuma alteracao foi enviada.
     exit /b 0
