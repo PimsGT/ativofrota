@@ -71,7 +71,7 @@ async function loadAssetDocuments(assetId) {
   const { data, error } = await supabase.from("asset_documents").select("id,file_name,storage_path,document_type,created_at").eq("asset_id", assetId).order("created_at", { ascending: false });
   const container = $("#assetDocuments"); if (!container) return;
   if (error) { container.innerHTML = '<small>Não foi possível carregar os documentos.</small>'; return; }
-  container.innerHTML = (data || []).map((doc) => `<div class="uploaded-document"><span>${esc(doc.file_name)}</span><small>${esc(doc.document_type || "documento")} · ${new Date(doc.created_at).toLocaleDateString("pt-BR")}</small><button type="button" class="text-btn" data-download-document="${doc.id}">Abrir</button></div>`).join("") || '<small>Nenhum documento ou foto anexado.</small>';
+  container.innerHTML = (data || []).map((doc) => { const typeLabel = doc.document_type === "aquisicao" || doc.document_type === "inclusao" ? "Inclusão" : doc.document_type === "foto" ? "Foto" : doc.document_type === "movimentacao" ? "Movimentação" : (doc.document_type || "Documento"); return `<div class="uploaded-document"><div class="uploaded-document-info"><strong class="uploaded-document-name">${esc(doc.file_name)}</strong><small class="uploaded-document-meta">${typeLabel} · incluído em ${new Date(doc.created_at).toLocaleDateString("pt-BR")}</small></div><button type="button" class="text-btn" data-download-document="${doc.id}">Abrir</button></div>`; }).join("") || '<small>Nenhum documento ou foto anexado.</small>';
   container.querySelectorAll("[data-download-document]").forEach((button) => button.addEventListener("click", async () => { const doc = (data || []).find((item) => item.id === button.dataset.downloadDocument); const { data: signed, error: signedError } = await supabase.storage.from(BUCKET).createSignedUrl(doc.storage_path, 3600); if (signedError) toast("Não foi possível abrir o arquivo."); else window.open(signed.signedUrl, "_blank", "noopener"); }));
 }
 
@@ -93,7 +93,7 @@ document.addEventListener("submit", async (event) => {
   if (event.target.id !== "assetDocumentForm") return;
   event.preventDefault(); event.stopImmediatePropagation(); const asset = state.assets.find((item) => item.id === event.target.dataset.assetId); const nf = event.target.querySelector("[name='assetNf']")?.files?.[0]; const photos = [...(event.target.querySelector("[name='assetPhotos']")?.files || [])];
   if (!asset) return toast("Ativo não encontrado.");
-  try { if (nf) await uploadDocument(asset, nf, "aquisicao"); for (const photo of photos) await uploadDocument(asset, photo, "foto"); toast("Documentos anexados ao ativo."); await loadAssetDocuments(asset.id); await loadData(); } catch (error) { console.error(error); toast(error.message || "Não foi possível anexar os arquivos."); }
+  try { if (nf) await uploadDocument(asset, nf, "inclusao"); for (const photo of photos) await uploadDocument(asset, photo, "foto"); toast("Documentos anexados ao ativo."); await loadAssetDocuments(asset.id); await loadData(); } catch (error) { console.error(error); toast(error.message || "Não foi possível anexar os arquivos."); }
 }, true);
 
 document.addEventListener("click", (event) => { const button = event.target.closest("[data-pending-open]"); if (!button) return; window.ativoFrotaOpenAssetDetail?.(button.dataset.pendingOpen); });
