@@ -200,3 +200,10 @@ Foi identificado que o Supabase carregava ativos sem empresa com o rótulo `SEM 
 ## Segunda correção do card sem classificação
 
 A primeira correção padronizou o texto, mas a causa também podia ocorrer quando `raw_company_name` continha um rótulo legado. O mapeamento remoto foi reforçado: o frontend agora considera um ativo como `SEM CLASSIFICAÇÃO` sempre que `company_id` e `current_company_id` são nulos, ignorando nomes textuais legados. `src/app.js` passou novamente no `node --check`.
+
+
+## Card CONTROLE — Saúde da auditoria e Monitor de Auditoria
+
+O gráfico circular do card `Saúde da auditoria` usava largura e altura fixas, mas o item podia encolher dentro do layout flexível, produzindo aparência oval/distorcida. O CSS foi reforçado com `min-width`, `flex: 0 0 76px` e `aspect-ratio: 1/1`, preservando o círculo.
+
+O módulo `audit-monitor.js` consulta corretamente `public.audit_events`, aplica empresa, tipo e intervalo de datas, e restringe a tela ao perfil Master. Como o projeto é novo e ainda não houve operações que gerem auditoria, a consulta pode retornar zero eventos legitimamente. A mensagem de estado vazio foi ajustada para informar explicitamente essa situação. O módulo passou no `node --check`; os 16 módulos JavaScript continuam válidos.
