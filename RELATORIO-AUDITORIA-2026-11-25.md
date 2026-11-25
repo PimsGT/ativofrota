@@ -207,3 +207,8 @@ A primeira correção padronizou o texto, mas a causa também podia ocorrer quan
 O gráfico circular do card `Saúde da auditoria` usava largura e altura fixas, mas o item podia encolher dentro do layout flexível, produzindo aparência oval/distorcida. O CSS foi reforçado com `min-width`, `flex: 0 0 76px` e `aspect-ratio: 1/1`, preservando o círculo.
 
 O módulo `audit-monitor.js` consulta corretamente `public.audit_events`, aplica empresa, tipo e intervalo de datas, e restringe a tela ao perfil Master. Como o projeto é novo e ainda não houve operações que gerem auditoria, a consulta pode retornar zero eventos legitimamente. A mensagem de estado vazio foi ajustada para informar explicitamente essa situação. O módulo passou no `node --check`; os 16 módulos JavaScript continuam válidos.
+
+
+## Ajuste final do gráfico de saúde
+
+A imagem confirmou que o círculo estava proporcional, mas o rótulo `/100` era um segundo item do CSS Grid com `margin-top` e `margin-left`, ficando cortado na borda inferior. O rótulo foi reposicionado como elemento absoluto dentro do círculo, com `right: 8px`, `bottom: 10px` e z-index próprio. Todos os 16 módulos JavaScript continuam válidos.
