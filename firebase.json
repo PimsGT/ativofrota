@@ -1,24 +1,66 @@
-{
-  "firestore": {
-    "rules": "firestore.rules"
-  },
-  "storage": {
-    "rules": "storage.rules"
-  },
-  "hosting": {
-    "public": ".",
-    "ignore": [
-      "firebase.json",
-      "**/.*",
-      "**/node_modules/**"
-    ],
-    "headers": [
-      {
-        "source": "**/*.@(js|css)",
-        "headers": [
-          { "key": "Cache-Control", "value": "no-cache" }
-        ]
-      }
-    ]
-  }
+﻿{
+    "hosting":  {
+                    "public":  ".",
+                    "ignore":  [
+                                   "firebase.json",
+                                   ".firebaserc",
+                                   "**/.*",
+                                   "**/node_modules/**",
+                                   "**/*.csv",
+                                   "**/*.sql",
+                                   "**/*.md",
+                                   "Acesso projeto Ativoimobilizado.txt",
+                                   "firestore.rules",
+                                   "storage.rules",
+                                   "firebase-data-model.md",
+                                   "src/firebase-*.js",
+                                   "src/supabase-config.js",
+                                   "src/supabase-config.example.js",
+                                   "supabase/**",
+                                   ".work/**",
+                                   "**/*.ps1",
+                                   "**/*.bat",
+                                   "**/*.cmd",
+                                   "**/*.exe",
+                                   "**/*.msi",
+                                   "**/*.zip",
+                                   "**/*.7z",
+                                   "**/*.xlsm",
+                                   "**/*.xlsx",
+                                   "**/*.docx",
+                                   "**/*.pdf"
+                               ],
+                    "headers":  [
+                                    {
+                                        "source":  "**/*.@(js|css)",
+                                        "headers":  [
+                                                        {
+                                                            "key":  "Cache-Control",
+                                                            "value":  "no-cache"
+                                                        }
+                                                    ]
+                                    },
+                                    {
+                                        "source":  "index.html",
+                                        "headers":  [
+                                                        {
+                                                            "key":  "Cache-Control",
+                                                            "value":  "no-store"
+                                                        },
+                                                        {
+                                                            "key":  "X-Content-Type-Options",
+                                                            "value":  "nosniff"
+                                                        },
+                                                        {
+                                                            "key":  "X-Frame-Options",
+                                                            "value":  "DENY"
+                                                        },
+                                                        {
+                                                            "key":  "Referrer-Policy",
+                                                            "value":  "strict-origin-when-cross-origin"
+                                                        }
+                                                    ]
+                                    }
+                                ]
+                }
 }

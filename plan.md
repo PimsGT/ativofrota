@@ -46,3 +46,12 @@ O app foi mantido sem dependências para funcionar imediatamente no Windows. A c
 A operação passa a considerar três empresas: AGRO IPUÃ, SANTA MARIA e SERRA BRANCA. Cada ativo possui empresa proprietária, além do local operacional. O seletor global permite enxergar uma empresa isoladamente, os cartões do dashboard mostram a distribuição da base e o inventário pode ser filtrado por empresa.
 
 Transferências são registradas por ativo, empresa de origem, empresa de destino, motivo, data e usuário. A movimentação atualiza a empresa proprietária do ativo e aparece na atividade recente e na trilha de auditoria. No Firebase, essa operação deve ser persistida em `transfers` e também gerar um evento imutável em `auditLogs`.
+
+
+## Evolução aprovada — Supabase + Firebase Hosting
+
+A versão operacional manterá o Supabase como fonte única de autenticação, dados patrimoniais, documentos e histórico. O Firebase será usado exclusivamente para hospedagem estática; Firebase Auth, Firestore, Storage e Analytics não fazem parte da arquitetura final.
+
+A interface não exibirá dados de exemplo antes da autenticação. Cadastro, transferência, classificação e documentos deverão persistir no Supabase e confirmar a linha afetada com `select()` antes de informar sucesso. O acesso será controlado por RLS e pela Edge Function de criação de usuários, com perfil Master validado no servidor.
+
+A publicação ficará preparada pelo `firebase.json` para o Firebase Hosting, com cache seguro para HTML e sem dependência de Node.js no app estático atual.

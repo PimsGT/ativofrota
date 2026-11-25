@@ -116,3 +116,25 @@ A função usa automaticamente `SUPABASE_URL`, `SUPABASE_ANON_KEY` e `SUPABASE_S
 ### Uso no app
 
 Depois de entrar como Master, abra **Usuários** no menu lateral, informe nome, e-mail, perfil e senha provisória com pelo menos oito caracteres. Entregue a senha provisória por um canal seguro. O usuário Patrimonial poderá acessar as rotinas operacionais, mas não verá a administração de usuários. No primeiro login, o app exigirá a definição de uma nova senha antes de liberar o dashboard.
+
+## Arquitetura final e publicação
+
+O AtivoFrota usa o **Supabase** para autenticação, perfis, empresas, ativos, histórico, documentos e fotos. O **Firebase é somente o hosting** dos arquivos estáticos; Firebase Auth, Firestore, Firebase Storage e Analytics não são usados pelo app.
+
+Antes da primeira publicação, execute no SQL Editor do Supabase, nesta ordem: `supabase-user-access.sql`; se houver carga inicial, `assets-import-setup.sql` ou `assets-import-stage.sql`, seguido da importação de `assets-import.csv` e do bloco de finalização; depois `assets-rls-master-access.sql`, `asset-lifecycle-migration.sql`, `supabase/production-hardening.sql` e `supabase/audit-monitor-migration.sql`. As políticas temporárias da importação são substituídas pelo RLS final. Depois, publique a Edge Function `supabase/functions/admin-create-user` e confirme as políticas do bucket privado `ativos-documentos`.
+
+Para publicar no Firebase Hosting, autentique o Firebase CLI, selecione o projeto correto e execute `firebase deploy --only hosting`. O `firebase.json` bloqueia CSVs, SQLs, arquivos de configuração sensíveis, regras e a pasta de funções. O arquivo `src/supabase-config.public.js` contém apenas a configuração pública necessária ao navegador; nunca coloque `service_role`, senha de banco ou token administrativo no frontend.
+
+O backup desta evolução foi criado na pasta irmã `app-imobilizado-backup-20261118-085730`.
+
+
+### Monitor de auditoria Master
+
+O arquivo `supabase/audit-monitor-migration.sql` cria a trilha `audit_events`, com eventos de cadastro, alteração, transferência, venda, baixa, reclassificação e documentos. A leitura é exclusiva do perfil `master`. Execute essa migração após as demais migrações e publique novamente o Hosting para disponibilizar o painel **Auditoria**.
+
+
+## Nota de arquitetura vigente — atualização da auditoria
+
+As seções antigas deste README que mencionam Firebase Authentication, Firestore ou Firebase Storage são referências históricas do MVP e não fazem parte da arquitetura vigente. O backend oficial do AtivoFrota é o Supabase: Auth, Postgres, RLS, Storage e Edge Functions. O Firebase, se utilizado, deve ser usado somente para Hosting estático.
+
+A sequência consolidada de correções SQL está em `supabase/APPLY-CORRECTIONS-SEQUENCE.sql`. Ela não inclui scripts de importação e deve ser revisada antes de execução no projeto remoto correto. Os scripts de validação e correção específicos ficam na mesma pasta `supabase/`.

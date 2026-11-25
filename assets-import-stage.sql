@@ -29,31 +29,34 @@ create table if not exists public.assets_import (
 alter table public.assets_import enable row level security;
 
 drop policy if exists "Administradores gerenciam carga de ativos" on public.assets_import;
-create policy "Administradores gerenciam carga de ativos"
+drop policy if exists "Master gerencia carga de ativos" on public.assets_import;
+create policy "Master gerencia carga de ativos"
 on public.assets_import
 for all
 to authenticated
-using (exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'))
-with check (exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'));
+using (public.is_master())
+with check (public.is_master());
 
--- Permite ao administrador visualizar ativos ainda sem empresa definida.
+-- Permite ao Master visualizar ativos ainda sem empresa definida.
 drop policy if exists "Administradores podem visualizar ativos pendentes" on public.assets;
-create policy "Administradores podem visualizar ativos pendentes"
+drop policy if exists "Master visualiza ativos pendentes" on public.assets;
+create policy "Master visualiza ativos pendentes"
 on public.assets
 for select
 to authenticated
 using (
-  exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin')
+  public.is_master()
   or exists (select 1 from public.user_companies uc where uc.user_id = auth.uid() and uc.company_id = assets.company_id)
 );
 
 drop policy if exists "Administradores gerenciam todos os ativos" on public.assets;
-create policy "Administradores gerenciam todos os ativos"
+drop policy if exists "Master gerencia todos os ativos" on public.assets;
+create policy "Master gerencia todos os ativos"
 on public.assets
 for all
 to authenticated
-using (exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'))
-with check (exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'));
+using (public.is_master())
+with check (public.is_master());
 
 -- Após importar assets-import.csv em public.assets_import, execute este bloco.
 insert into public.assets (

@@ -4,6 +4,8 @@ src/supabase-config.js
 node_modules/
 .DS_Store
 .work/
+.firebase/
+supabase/.temp/
 assets-import.csv
 notas-fiscais-manifest.csv
 subir app frota.txt

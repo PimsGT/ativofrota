@@ -3,6 +3,7 @@ setlocal EnableExtensions
 
 set "APP_DIR=%~dp0"
 cd /d "%APP_DIR%"
+set "GIT_PAGER=cat"
 
 set "GIT_CONFIG_COUNT=1"
 set "GIT_CONFIG_KEY_0=safe.directory"
@@ -50,7 +51,7 @@ if errorlevel 1 (
 )
 
 echo Estado atual:
-git status --short
+git --no-pager status --short
 if errorlevel 1 (
     echo ERRO: nao foi possivel consultar o status do Git.
     pause
@@ -58,17 +59,24 @@ if errorlevel 1 (
 )
 
 echo.
-echo Adicionando somente os arquivos autorizados...
-git add -- README.md index.html src/app.js src/supabase-auth.js src/user-management.js supabase-user-access.sql bootstrap-master-pims.sql supabase push-github.bat .gitignore
+echo Adicionando os arquivos do projeto, respeitando o .gitignore...
+git add --all
 if errorlevel 1 (
     echo ERRO: falha ao adicionar os arquivos.
     pause
     exit /b 1
 )
 
+for /f "delims=" %%F in ('git diff --cached --name-only ^| findstr /I /R /C:"^\.env" /C:"\.env\." /C:"supabase/\.temp/" /C:"^\.firebase/" /C:"src/supabase-config\.js" /C:"src/firebase-config\.js" /C:"Acesso projeto Ativoimobilizado\.txt"') do (
+    echo ERRO: arquivo sensivel ou temporario preparado: %%F
+    git reset --quiet
+    pause
+    exit /b 1
+)
+
 echo.
 echo Arquivos preparados para o commit:
-git diff --cached --name-status
+git --no-pager diff --cached --name-status
 if errorlevel 1 (
     echo ERRO: nao foi possivel verificar os arquivos preparados.
     pause
@@ -88,8 +96,9 @@ echo.
 echo Commit que sera criado:
 echo %COMMIT_MESSAGE%
 echo.
-choice /C SN /N /M "Criar commit e enviar para o GitHub? [S/N] "
-if errorlevel 2 (
+set "CONFIRM="
+set /p "CONFIRM=Criar commit e enviar para o GitHub? Digite S ou N e pressione Enter: "
+if /I not "%CONFIRM%"=="S" (
     echo Operacao cancelada. Nenhuma alteracao foi enviada.
     exit /b 0
 )

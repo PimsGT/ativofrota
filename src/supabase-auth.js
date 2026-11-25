@@ -4,7 +4,7 @@ const gate = document.querySelector("#authGate");
 const form = document.querySelector("#loginForm");
 const error = document.querySelector("#authError");
 const submitButton = form?.querySelector('button[type="submit"]');
-const dashboard = document.querySelector("#dashboardView");
+const appShell = document.querySelector(".app-shell");
 const logoutButton = document.querySelector("#logoutBtn");
 let sessionResolved = false;
 
@@ -21,7 +21,7 @@ function setLoading(loading) {
 function showSession(session) {
   const authenticated = Boolean(session?.user);
   gate?.classList.toggle("hidden", authenticated);
-  dashboard?.classList.toggle("hidden", !authenticated);
+  appShell?.toggleAttribute("inert", !authenticated);
 
   if (authenticated) {
     setError();
@@ -48,7 +48,7 @@ supabase.auth.onAuthStateChange((event, session) => {
     showSession(session);
     return;
   }
-  if (event === "SIGNED_OUT" && sessionResolved) showSession(null);
+  if (event === "SIGNED_OUT" && sessionResolved) { location.reload(); }
 });
 
 logoutButton?.addEventListener("click", async () => {
@@ -76,7 +76,7 @@ form?.addEventListener("submit", async (event) => {
     if (loginError) throw loginError;
     showSession(data?.session ?? null);
   } catch (loginError) {
-    setError(loginError?.message?.toLowerCase().includes("email") || loginError?.message?.toLowerCase().includes("password")
+    setError(loginError?.code === "invalid_credentials" || loginError?.message?.toLowerCase().includes("email") || loginError?.message?.toLowerCase().includes("password")
       ? "E-mail ou senha inválidos."
       : "Não foi possível entrar. Verifique sua conexão e tente novamente.");
     console.error("Falha no login do Supabase:", loginError);
@@ -84,3 +84,4 @@ form?.addEventListener("submit", async (event) => {
     setLoading(false);
   }
 });
+

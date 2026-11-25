@@ -1,10 +1,9 @@
 import { supabase } from "./supabase-init.js";
 
 const BUCKET = "ativos-documentos";
-const state = { files: [] };
+const state = { files: [], pendingAssets: [] };
 const $ = (selector) => document.querySelector(selector);
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[c]));
-const localAssets = () => window.ativoFrotaAssets || [];
 
 function toast(message) {
   const el = $("#toast");
@@ -14,11 +13,19 @@ function toast(message) {
   setTimeout(() => el.classList.remove("show"), 2800);
 }
 
+function currentAssets() {
+  return Array.isArray(window.ativoFrotaAssets) ? window.ativoFrotaAssets : [];
+}
+
 function renderAssetOptions() {
   const select = $("#pendingAsset");
   if (!select) return;
-  const assets = localAssets();
-  select.innerHTML = '<option value="">Sem vínculo por enquanto</option>' + assets.map((a) => `<option value="${esc(a.id)}">${esc(a.name)} · proprietário: ${esc(a.displayCompany || a.company || "não definido")} · local: ${esc(a.operational_location || "não informado")}</option>`).join("");
+  const company = $("#pendingCompany")?.value || "";
+  const assets = state.pendingAssets.length ? state.pendingAssets : currentAssets().filter((a) => a.classificationStatus === "pendente" || a.classificationStatus === "revisar" || !a.company);
+  const filtered = company
+    ? assets.filter((a) => !a.company || a.company === company || a.displayCompany === company)
+    : assets;
+  select.innerHTML = '<option value="">Sem vínculo por enquanto</option>' + filtered.map((a) => `<option value="${esc(a.id)}">${esc(a.name)} · origem: ${esc(a.displayCompany || a.company || "não definida")} · local: ${esc(a.location || a.operational_location || "não informado")}</option>`).join("");
 }
 
 function renderQueue() {
@@ -35,7 +42,7 @@ function renderQueue() {
 }
 
 function addFiles(fileList) {
-  [...fileList].forEach((file) => {
+  [...(fileList || [])].forEach((file) => {
     const validType = file.type === "application/pdf" || file.type.startsWith("image/");
     const duplicate = state.files.some((item) => item.file.name === file.name && item.file.size === file.size);
     state.files.push({ file, status: validType && !duplicate && file.size <= 25 * 1024 * 1024 ? "queued" : "error", message: !validType ? "Tipo não permitido." : file.size > 25 * 1024 * 1024 ? "Arquivo maior que 25 MB." : duplicate ? "Arquivo já está na fila." : "" });
@@ -52,17 +59,17 @@ async function uploadOne(index) {
   if (!companyName) { toast("Selecione a empresa do documento."); return; }
   item.status = "uploading"; item.message = ""; renderQueue();
   try {
-    const { data: company, error: companyError } = await supabase.from("companies").select("id").eq("name", companyName).single();
+    const { data: company, error: companyError } = await supabase.from("companies").select("id,name").eq("name", companyName).single();
     if (companyError) throw companyError;
     const folder = linkedAssetId ? `assets/${linkedAssetId}/documents` : "imports/notas-fiscais-originais";
     const safeName = item.file.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9._-]+/g, "-").toLowerCase();
     const storagePath = `${folder}/${Date.now()}-${safeName}`;
     const { error: uploadError } = await supabase.storage.from(BUCKET).upload(storagePath, item.file, { upsert: false, contentType: item.file.type || undefined, cacheControl: "3600" });
     if (uploadError) throw uploadError;
-    const { error: recordError } = await supabase.from("asset_documents").insert({ asset_id: linkedAssetId, file_name: item.file.name, storage_path: storagePath, document_type: $("#pendingType")?.value || "outro", company_id: company.id, match_status: linkedAssetId ? "confirmado" : assetId ? "sugerido" : "pendente" });
+    const { error: recordError } = await supabase.from("asset_documents").insert({ asset_id: linkedAssetId, file_name: item.file.name, storage_path: storagePath, document_type: $("#pendingType")?.value || "outro", company_id: company.id, match_status: linkedAssetId ? "confirmado" : "pendente" });
     if (recordError) throw recordError;
     if (linkedAssetId) {
-      const { error: assetError } = await supabase.from("assets").update({ company_id: company.id, classification_status: "classificado", updated_at: new Date().toISOString() }).eq("id", linkedAssetId);
+      const { error: assetError } = await supabase.from("assets").update({ company_id: company.id, current_company_id: company.id, classification_status: "classificado", updated_at: new Date().toISOString() }).eq("id", linkedAssetId);
       if (assetError) throw assetError;
     }
     item.status = "uploaded"; item.message = `Enviado para ${storagePath}`; renderQueue(); toast("Documento enviado e registrado.");
@@ -72,24 +79,40 @@ async function uploadOne(index) {
 }
 
 async function uploadAll() {
+  if (!state.files.length) { toast("Adicione pelo menos um arquivo antes de enviar."); return; }
   for (let index = 0; index < state.files.length; index += 1) await uploadOne(index);
 }
 
-async function loadRemoteAssets() {
+async function loadRemotePendingAssets() {
   const { data, error } = await supabase.from("assets").select("id,name,company_id,category,classification_status,raw_company_name,operational_location,chassis").in("classification_status", ["pendente", "revisar"]).order("name");
-  if (!error && data?.length) {
-    const companyIds = [...new Set(data.map((asset) => asset.company_id).filter(Boolean))];
-    const { data: companiesData } = await supabase.from("companies").select("id,name").in("id", companyIds);
-    const companyMap = Object.fromEntries((companiesData || []).map((company) => [company.id, company.name]));
-    window.ativoFrotaAssets = data.map((asset) => ({ ...asset, company: companyMap[asset.company_id] || "", displayCompany: asset.raw_company_name || "Sem proprietário" }));
+  if (error) {
+    console.error("Falha ao carregar ativos pendentes:", error);
+    state.pendingAssets = currentAssets().filter((a) => a.classificationStatus === "pendente" || a.classificationStatus === "revisar" || !a.company);
     renderAssetOptions();
+    return;
   }
+  const companyIds = [...new Set((data || []).map((asset) => asset.company_id).filter(Boolean))];
+  const { data: companiesData } = companyIds.length ? await supabase.from("companies").select("id,name").in("id", companyIds) : { data: [] };
+  const companyMap = Object.fromEntries((companiesData || []).map((company) => [company.id, company.name]));
+  state.pendingAssets = (data || []).map((asset) => ({ ...asset, company: companyMap[asset.company_id] || "", displayCompany: asset.raw_company_name || "Sem proprietário", location: asset.operational_location || "" }));
+  renderAssetOptions();
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  const input = $("#pendingFiles");
-  input?.addEventListener("change", (event) => addFiles(event.target.files));
+function ensureUi() {
+  if ($("#pendingFiles") || !$("#pendenciasView")) return;
+  const section = document.createElement("section");
+  section.className = "panel pending-documents-panel";
+  section.innerHTML = `<div class="panel-header"><div><p class="eyebrow">DOCUMENTOS PENDENTES</p><h3>Fila de notas fiscais e evidências</h3></div><span class="muted" id="pendingSummary">0 arquivo(s) na fila</span></div><div class="pending-controls"><label>Empresa<select id="pendingCompany"><option value="">Selecione a empresa</option><option>AGRO IPUÃ</option><option>SANTA MARIA</option><option>SERRA BRANCA</option></select></label><label>Vínculo com ativo<select id="pendingAsset"><option value="">Sem vínculo por enquanto</option></select></label><label>Tipo<select id="pendingType"><option value="aquisicao">Aquisição</option><option value="antecessora">NF antecessora</option><option value="transferencia">Transferência</option><option value="outro">Outro</option></select></label></div><label class="file-btn">Adicionar arquivos<input id="pendingFiles" type="file" accept="application/pdf,image/*" multiple hidden /></label><div class="table-wrap"><table><thead><tr><th>Arquivo</th><th>Status</th><th>Ação</th></tr></thead><tbody id="pendingDocumentTable"></tbody></table></div><button id="pendingUploadAll" class="primary-btn" type="button">Enviar arquivos da fila</button>`;
+  $("#pendenciasView").appendChild(section);
+}
+
+function start() {
+  ensureUi();
+  $("#pendingFiles")?.addEventListener("change", (event) => addFiles(event.target.files));
   $("#pendingUploadAll")?.addEventListener("click", uploadAll);
+  $("#pendingCompany")?.addEventListener("change", renderAssetOptions);
+  $("#pendingAsset")?.addEventListener("change", () => { const selected = $("#pendingAsset")?.selectedOptions?.[0]; if (selected) toast("Ativo selecionado para vinculação."); });
+  $("#pendingType")?.addEventListener("change", () => toast(`Tipo de documento: ${$("#pendingType").value}`));
   $("#pendingDocumentTable")?.addEventListener("click", (event) => {
     const upload = event.target.closest("[data-pending-upload]");
     const remove = event.target.closest("[data-pending-remove]");
@@ -97,7 +120,12 @@ document.addEventListener("DOMContentLoaded", () => {
     if (remove) { state.files.splice(Number(remove.dataset.pendingRemove), 1); renderQueue(); }
   });
   document.addEventListener("ativofrota:assets-ready", renderAssetOptions);
-  renderAssetOptions(); renderQueue();
-  supabase.auth.getSession().then(({ data }) => { if (data.session) loadRemoteAssets(); });
-  supabase.auth.onAuthStateChange((_event, session) => { if (session) loadRemoteAssets(); });
-});
+  document.addEventListener("ativofrota:authenticated", () => { renderAssetOptions(); loadRemotePendingAssets(); });
+  document.addEventListener("ativofrota:supabase-ready", () => { renderAssetOptions(); });
+  renderAssetOptions();
+  renderQueue();
+  supabase.auth.getSession().then(({ data }) => { if (data?.session) loadRemotePendingAssets(); }).catch(() => {});
+}
+
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });
+else start();

@@ -1,4 +1,4 @@
-import { supabase } from "./supabase-init.js";
+﻿import { supabase } from "./supabase-init.js";
 
 const $ = (selector) => document.querySelector(selector);
 const usersView = $("#usersView");
@@ -9,6 +9,7 @@ const passwordError = $("#passwordError");
 const userForm = $("#userForm");
 const userError = $("#userError");
 const userTable = $("#userTable");
+const esc = (value) => { const el = document.createElement("div"); el.textContent = value ?? ""; return el.innerHTML; };
 let currentProfile = null;
 let loadedUserId = null;
 
@@ -48,6 +49,7 @@ async function loadProfile(user) {
     loadedUserId = null;
     usersNav?.classList.add("hidden");
     toast("Seu usuário ainda não possui um perfil no AtivoFrota.");
+    await supabase.auth.signOut();
     return;
   }
 
@@ -55,6 +57,7 @@ async function loadProfile(user) {
     loadedUserId = null;
     usersNav?.classList.add("hidden");
     toast("Seu perfil está inativo. Fale com o usuário Master.");
+    await supabase.auth.signOut();
     return;
   }
 
@@ -82,7 +85,7 @@ async function loadUsers() {
     return;
   }
   userTable.innerHTML = (data || []).map((profile) => `<tr>
-    <td>${profile.display_name}</td>
+    <td>${esc(profile.display_name)}</td>
     <td>${profile.role === "master" ? "Master" : "Patrimonial"}</td>
     <td><span class="status-pill ${profile.active ? "green" : "red"}">${profile.active ? "Ativo" : "Inativo"}</span></td>
     <td>${profile.must_change_password ? "Sim" : "Não"}</td>
@@ -111,8 +114,8 @@ passwordForm?.addEventListener("submit", async (event) => {
     passwordError.textContent = "Não foi possível atualizar a senha. Tente novamente.";
     return;
   }
-  const { error: profileError } = await supabase.from("profiles").update({ must_change_password: false }).eq("id", currentProfile.id);
-  if (profileError) {
+  const { data: profileRows, error: profileError } = await supabase.from("profiles").update({ must_change_password: false }).eq("id", currentProfile.id).select("id");
+  if (profileError || !profileRows?.length) {
     passwordError.textContent = "A senha foi alterada, mas o perfil não foi atualizado. Recarregue a página.";
     return;
   }
@@ -160,3 +163,4 @@ supabase.auth.getSession()
     if (data?.session?.user) loadProfile(data.session.user);
   })
   .catch((error) => console.error("Falha ao carregar o perfil atual:", error));
+
