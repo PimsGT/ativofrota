@@ -41,13 +41,36 @@ Deno.serve(async (request) => {
     return response({ error: "Apenas usuários Master podem criar contas." }, 403);
   }
 
-  let payload: { displayName?: string; email?: string; role?: string; temporaryPassword?: string };
+  let payload: { action?: string; userId?: string; displayName?: string; email?: string; role?: string; temporaryPassword?: string };
   try {
     payload = await request.json();
   } catch {
     return response({ error: "Dados inválidos." }, 400);
   }
 
+  if (payload.action === "list") {
+    const [{ data: profiles, error: profilesError }, { data: authUsers, error: authUsersError }] = await Promise.all([
+      admin.from("profiles").select("id, display_name, role, must_change_password, active, created_at").order("created_at", { ascending: false }),
+      admin.auth.admin.listUsers({ page: 1, perPage: 1000 }),
+    ]);
+    if (profilesError || authUsersError) return response({ error: "Não foi possível carregar os usuários." }, 500);
+    const emails = new Map((authUsers?.users ?? []).map((user) => [user.id, user.email ?? ""]));
+    return response({ users: (profiles ?? []).map((profile) => ({ ...profile, email: emails.get(profile.id) ?? "" })) });
+  }
+
+  if (payload.action === "reset-password") {
+    const userId = payload.userId?.trim() ?? "";
+    const temporaryPassword = payload.temporaryPassword ?? "";
+    if (!userId || temporaryPassword.length < 8) return response({ error: "Informe o usuário e uma senha provisória com pelo menos 8 caracteres." }, 400);
+    if (userId === caller.id) return response({ error: "Use a troca de senha da sua própria sessão para alterar sua senha." }, 400);
+    const { data: target, error: targetError } = await admin.from("profiles").select("id, role, active").eq("id", userId).maybeSingle();
+    if (targetError || !target) return response({ error: "Usuário não encontrado." }, 404);
+    const { error: passwordError } = await admin.auth.admin.updateUserById(userId, { password: temporaryPassword });
+    if (passwordError) return response({ error: passwordError.message }, 400);
+    const { error: profileUpdateError } = await admin.from("profiles").update({ must_change_password: true }).eq("id", userId);
+    if (profileUpdateError) return response({ error: "A senha foi alterada, mas o perfil não pôde ser marcado para troca obrigatória." }, 500);
+    return response({ ok: true });
+  }
   const displayName = payload.displayName?.trim() ?? "";
   const email = payload.email?.trim().toLowerCase() ?? "";
   const role = payload.role === "master" ? "master" : payload.role === "patrimonial" ? "patrimonial" : "";

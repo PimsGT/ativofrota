@@ -1,4 +1,4 @@
-﻿import { supabase } from "./supabase-init.js";
+import { supabase } from "./supabase-init.js";
 
 const $ = (selector) => document.querySelector(selector);
 const usersView = $("#usersView");
@@ -74,25 +74,52 @@ async function loadProfile(user) {
   }
 }
 
-async function loadUsers() {
-  if (currentProfile?.role !== "master" || !userTable) return;
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id, display_name, role, must_change_password, active, created_at")
-    .order("created_at", { ascending: false });
-  if (error) {
-    userTable.innerHTML = `<tr><td colspan="5">Não foi possível carregar os usuários.</td></tr>`;
-    return;
-  }
-  userTable.innerHTML = (data || []).map((profile) => `<tr>
-    <td>${esc(profile.display_name)}</td>
-    <td>${profile.role === "master" ? "Master" : "Patrimonial"}</td>
-    <td><span class="status-pill ${profile.active ? "green" : "red"}">${profile.active ? "Ativo" : "Inativo"}</span></td>
-    <td>${profile.must_change_password ? "Sim" : "Não"}</td>
-    <td>${new Date(profile.created_at).toLocaleDateString("pt-BR")}</td>
-  </tr>`).join("") || `<tr><td colspan="5">Nenhum usuário cadastrado.</td></tr>`;
+async function invokeAdmin(payload) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const { data, error } = await supabase.functions.invoke("admin-create-user", {
+    body: payload,
+    headers: { Authorization: `Bearer ${session?.access_token ?? ""}` },
+  });
+  if (error || data?.error) throw new Error(data?.error || "Não foi possível concluir a operação.");
+  return data;
 }
 
+async function loadUsers() {
+  if (currentProfile?.role !== "master" || !userTable) return;
+  try {
+    const { users } = await invokeAdmin({ action: "list" });
+    userTable.innerHTML = (users || []).map((profile) => `<tr>
+      <td>${esc(profile.display_name)}<small class="muted">${esc(profile.email)}</small></td>
+      <td>${profile.role === "master" ? "Master" : "Patrimonial"}</td>
+      <td><span class="status-pill ${profile.active ? "green" : "red"}">${profile.active ? "Ativo" : "Inativo"}</span></td>
+      <td>${profile.must_change_password ? "Sim" : "Não"}</td>
+      <td>${new Date(profile.created_at).toLocaleDateString("pt-BR")}</td>
+      <td>${profile.id === currentProfile.id ? "—" : `<button class="text-btn reset-user-password" type="button" data-user-id="${esc(profile.id)}" data-user-name="${esc(profile.display_name)}">Definir senha</button>`}</td>
+    </tr>`).join("") || `<tr><td colspan="6">Nenhum usuário cadastrado.</td></tr>`;
+  } catch (error) {
+    console.error("Falha ao carregar usuários:", error);
+    userTable.innerHTML = `<tr><td colspan="6">${esc(error.message)}</td></tr>`;
+  }
+}
+userTable?.addEventListener("click", async (event) => {
+  const button = event.target.closest(".reset-user-password");
+  if (!button) return;
+  const name = button.dataset.userName || "usuário";
+  const temporaryPassword = window.prompt(`Digite a nova senha provisória para ${name} (mínimo de 8 caracteres):`);
+  if (temporaryPassword === null) return;
+  const confirmation = window.prompt("Digite novamente a senha provisória para confirmar:");
+  if (temporaryPassword !== confirmation) { toast("As senhas não coincidem."); return; }
+  if (temporaryPassword.length < 8) { toast("A senha deve ter pelo menos 8 caracteres."); return; }
+  button.disabled = true;
+  try {
+    await invokeAdmin({ action: "reset-password", userId: button.dataset.userId, temporaryPassword });
+    toast("Senha provisória definida. Entregue-a ao usuário por canal seguro.");
+    await loadUsers();
+  } catch (error) {
+    toast(error.message);
+    button.disabled = false;
+  }
+});
 usersNav?.addEventListener("click", loadUsers);
 $("#reloadUsers")?.addEventListener("click", loadUsers);
 passwordForm?.addEventListener("submit", async (event) => {
@@ -132,13 +159,11 @@ userForm?.addEventListener("submit", async (event) => {
 
   const formData = new FormData(userForm);
   const payload = Object.fromEntries(formData.entries());
-  const { data: { session } } = await supabase.auth.getSession();
-  const { data, error } = await supabase.functions.invoke("admin-create-user", {
-    body: payload,
-    headers: { Authorization: `Bearer ${session?.access_token ?? ""}` },
-  });
-  if (error || data?.error) {
-    userError.textContent = data?.error || "Não foi possível criar o usuário.";
+  let data;
+  try {
+    data = await invokeAdmin(payload);
+  } catch (error) {
+    userError.textContent = error.message;
     return;
   }
   userForm.reset();
