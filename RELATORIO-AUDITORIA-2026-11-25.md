@@ -190,3 +190,8 @@ Nova regressão local:
 Foi decidido não criar ou utilizar um ambiente separado de homologação. A validação remota e as correções continuam direcionadas ao projeto de produção `AtivoFrota Imobilizado`.
 
 Foi tentado um smoke test HTTP alternativo com Python e Node, mas os processos servidores iniciados pelo terminal não permaneceram acessíveis ao processo de requisição neste ambiente Windows. O `index.html`, seus 10 scripts referenciados e os 16 módulos JavaScript foram validados por inspeção e `node --check`; não foi feita alteração no código para contornar essa limitação operacional.
+
+
+## Correção do card de ativos sem classificação
+
+Foi identificado que o Supabase carregava ativos sem empresa com o rótulo `SEM CLASSIFICACAO` (sem acento), enquanto o dashboard filtrava pelo rótulo `SEM CLASSIFICAÇÃO` (com acento). Por isso, os 205 ativos sem empresa apareciam na base, mas o card mostrava zero. O fallback do carregamento remoto em `src/app.js` foi padronizado para `SEM CLASSIFICAÇÃO`; a sintaxe do arquivo foi validada novamente com `node --check`.
