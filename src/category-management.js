@@ -1,51 +1,22 @@
 import { supabase } from "./supabase-init.js";
-
 const $ = (selector) => document.querySelector(selector);
-const nav = $("[data-view='settings']");
-const view = $("#settingsView");
-const table = $("#categoryTable");
-const form = $("#categoryForm");
-const errorBox = $("#categoryError");
+const nav = $("[data-view='settings']"); const view = $("#settingsView"); const table = $("#categoryTable"); const historyTable = $("#categoryMergeHistory"); const form = $("#categoryForm"); const mergeForm = $("#categoryMergeForm"); const errorBox = $("#categoryError");
 const esc = (value) => { const node = document.createElement("div"); node.textContent = value ?? ""; return node.innerHTML; };
-let profile = null;
-let categories = [];
-
+let profile = null; let categories = [];
 function toast(message) { const node = $("#toast"); if (!node) return; node.textContent = message; node.classList.add("show"); setTimeout(() => node.classList.remove("show"), 2800); }
 function isMaster() { return profile?.role === "master" && profile.active; }
-function setVisibility() {
-  const allowed = isMaster();
-  nav?.classList.toggle("hidden", !allowed);
-  if (!allowed && view && !view.classList.contains("hidden")) $("[data-view='dashboard']")?.click();
-}
+function setVisibility() { const allowed = isMaster(); nav?.classList.toggle("hidden", !allowed); if (!allowed && view && !view.classList.contains("hidden")) $("[data-view='dashboard']")?.click(); }
 function render() {
-  if (!table) return;
-  table.innerHTML = categories.map((item) => `<tr><td><strong>${esc(item.name)}</strong></td><td>${item.sort_order}</td><td><span class="status-pill ${item.active ? "green" : "red"}">${item.active ? "Ativa" : "Inativa"}</span></td><td><button class="text-btn" type="button" data-category-edit="${item.id}">Editar</button><button class="text-btn danger-text" type="button" data-category-toggle="${item.id}">${item.active ? "Inativar" : "Reativar"}</button></td></tr>`).join("") || '<tr><td colspan="4" class="muted">Nenhuma categoria cadastrada.</td></tr>';
+  const active = categories.filter((item) => item.active);
+  table.innerHTML = active.map((item) => `<tr><td><strong>${esc(item.name)}</strong></td><td>${item.sort_order}</td><td>${item.asset_count ?? "—"}</td><td><span class="status-pill green">Ativa</span></td><td><button class="text-btn" type="button" data-category-edit="${item.id}">Editar</button><button class="text-btn" type="button" data-category-merge="${item.id}">Mesclar</button></td></tr>`).join("") || '<tr><td colspan="5" class="muted">Nenhuma categoria ativa cadastrada.</td></tr>';
+  const options = active.map((item) => `<option value="${esc(item.id)}">${esc(item.name)}</option>`).join(""); if (mergeForm) { mergeForm.elements.sourceId.innerHTML = '<option value="">Selecione a origem</option>' + options; mergeForm.elements.targetId.innerHTML = '<option value="">Selecione o destino</option>' + options; }
 }
-async function loadCategories() {
-  if (!isMaster()) return;
-  const { data, error } = await supabase.from("asset_categories").select("id,name,active,sort_order").order("sort_order").order("name");
-  if (error) { console.error(error); if (table) table.innerHTML = `<tr><td colspan="4">${esc(error.message)}</td></tr>`; return; }
-  categories = data || [];
-  window.ativoFrotaCategories = categories.filter((item) => item.active).map((item) => item.name);
-  render();
-  document.dispatchEvent(new CustomEvent("ativofrota:categories-ready", { detail: categories }));
-}
+async function loadHistory() { if (!historyTable || !isMaster()) return; const { data, error } = await supabase.from("asset_category_merge_log").select("source_category_name,target_category_name,assets_migrated,created_at").order("created_at", { ascending: false }).limit(100); if (error) { historyTable.innerHTML = `<tr><td colspan="4">${esc(error.message)}</td></tr>`; return; } historyTable.innerHTML = (data || []).map((item) => `<tr><td>${esc(item.source_category_name)}</td><td>${esc(item.target_category_name)}</td><td>${item.assets_migrated}</td><td>${new Date(item.created_at).toLocaleString("pt-BR")}</td></tr>`).join("") || '<tr><td colspan="4" class="muted">Nenhuma mesclagem registrada.</td></tr>'; }
+async function loadCategories() { if (!isMaster()) return; const { data, error } = await supabase.from("asset_categories").select("id,name,active,sort_order").order("active", { ascending: false }).order("sort_order").order("name"); if (error) { table.innerHTML = `<tr><td colspan="5">${esc(error.message)}</td></tr>`; return; } const { data: assetRows } = await supabase.from("assets").select("category"); const counts = {}; (assetRows || []).forEach((asset) => { const key = String(asset.category || "").trim().toLowerCase(); if (key) counts[key] = (counts[key] || 0) + 1; }); categories = (data || []).map((item) => ({ ...item, asset_count: counts[String(item.name).trim().toLowerCase()] || 0 })); window.ativoFrotaCategories = categories.filter((item) => item.active).map((item) => item.name); render(); await loadHistory(); document.dispatchEvent(new CustomEvent("ativofrota:categories-ready", { detail: categories })); }
 function resetForm() { form?.reset(); if (form) form.elements.categoryId.value = ""; if (errorBox) errorBox.textContent = ""; $("#categoryFormTitle").textContent = "Nova categoria"; }
-form?.addEventListener("submit", async (event) => {
-  event.preventDefault(); if (!isMaster()) return;
-  errorBox.textContent = "";
-  const data = new FormData(form); const id = data.get("categoryId"); const name = String(data.get("name") || "").trim(); const sortOrder = Number(data.get("sortOrder")) || 100;
-  if (!name) { errorBox.textContent = "Informe o nome da categoria."; return; }
-  const payload = { name, sort_order: sortOrder, updated_at: new Date().toISOString() };
-  const result = id ? await supabase.from("asset_categories").update(payload).eq("id", id) : await supabase.from("asset_categories").insert({ ...payload, created_by: (await supabase.auth.getUser()).data.user?.id });
-  if (result.error) { errorBox.textContent = result.error.message.includes("duplicate") ? "Já existe uma categoria com esse nome." : result.error.message; return; }
-  resetForm(); await loadCategories(); toast(id ? "Categoria atualizada." : "Categoria criada.");
-});
-view?.addEventListener("click", async (event) => {
-  const edit = event.target.closest("[data-category-edit]"); const toggle = event.target.closest("[data-category-toggle]");
-  if (edit) { const item = categories.find((entry) => entry.id === edit.dataset.categoryEdit); if (!item) return; form.elements.categoryId.value = item.id; form.elements.name.value = item.name; form.elements.sortOrder.value = item.sort_order; $("#categoryFormTitle").textContent = "Editar categoria"; }
-  if (toggle) { const item = categories.find((entry) => entry.id === toggle.dataset.categoryToggle); if (!item || !window.confirm(`${item.active ? "Inativar" : "Reativar"} a categoria ${item.name}?`)) return; const { error } = await supabase.from("asset_categories").update({ active: !item.active, updated_at: new Date().toISOString() }).eq("id", item.id); if (error) return toast(error.message); await loadCategories(); toast(item.active ? "Categoria inativada." : "Categoria reativada."); }
-});
+form?.addEventListener("submit", async (event) => { event.preventDefault(); if (!isMaster()) return; errorBox.textContent = ""; const data = new FormData(form); const id = data.get("categoryId"); const name = String(data.get("name") || "").trim(); const sortOrder = Number(data.get("sortOrder")) || 100; if (!name) { errorBox.textContent = "Informe o nome da categoria."; return; } const payload = { name, sort_order: sortOrder, updated_at: new Date().toISOString() }; const result = id ? await supabase.from("asset_categories").update(payload).eq("id", id) : await supabase.from("asset_categories").insert({ ...payload, created_by: (await supabase.auth.getUser()).data.user?.id }); if (result.error) { errorBox.textContent = result.error.message.includes("duplicate") ? "Já existe uma categoria com esse nome." : result.error.message; return; } resetForm(); await loadCategories(); toast(id ? "Categoria atualizada." : "Categoria criada."); });
+mergeForm?.addEventListener("submit", async (event) => { event.preventDefault(); if (!isMaster()) return; const sourceId = mergeForm.elements.sourceId.value; const targetId = mergeForm.elements.targetId.value; const source = categories.find((item) => item.id === sourceId); const target = categories.find((item) => item.id === targetId); if (!source || !target || sourceId === targetId) return toast("Selecione categorias de origem e destino diferentes."); if (!window.confirm(`Mesclar ${source.name} em ${target.name}? Todos os ativos da origem serão migrados.`)) return; const { data, error } = await supabase.rpc("merge_asset_category", { source_id: sourceId, target_id: targetId }); if (error) return toast(error.message); await loadCategories(); mergeForm.reset(); toast(`${data || 0} ativo(s) migrado(s).`); });
+view?.addEventListener("click", (event) => { const edit = event.target.closest("[data-category-edit]"); const merge = event.target.closest("[data-category-merge]"); if (edit) { const item = categories.find((entry) => entry.id === edit.dataset.categoryEdit); if (!item) return; form.elements.categoryId.value = item.id; form.elements.name.value = item.name; form.elements.sortOrder.value = item.sort_order; $("#categoryFormTitle").textContent = "Editar categoria"; } if (merge) { mergeForm.elements.sourceId.value = merge.dataset.categoryMerge; mergeForm.scrollIntoView({ behavior: "smooth", block: "center" }); } });
 $("#newCategoryBtn")?.addEventListener("click", resetForm);
 document.addEventListener("ativofrota:profile-ready", (event) => { profile = event.detail; setVisibility(); if (isMaster()) loadCategories(); });
 document.addEventListener("ativofrota:authenticated", async (event) => { const { data } = await supabase.from("profiles").select("role,active").eq("id", event.detail?.id).maybeSingle(); profile = data; setVisibility(); if (isMaster()) loadCategories(); });
