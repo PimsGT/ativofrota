@@ -63,6 +63,7 @@ async function loadProfile(user) {
   }
 
   currentProfile = data;
+  document.dispatchEvent(new CustomEvent("ativofrota:profile-ready", { detail: data }));
   setRoleVisibility();
   const name = data.display_name || user.email || "Usuário";
   const userName = document.querySelector(".user-chip strong");
