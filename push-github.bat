@@ -11,11 +11,13 @@ set "GIT_CONFIG_VALUE_0=%APP_DIR%"
 
 set "COMMIT_MESSAGE=Atualizar AtivoFrota"
 if not "%~1"=="" set "COMMIT_MESSAGE=%~1"
+set "FIREBASE_PROJECT=ativofrota-imobilizado"
+set "FIREBASE_CLI=%APP_DIR%.work\tools\node_modules\.bin\firebase.cmd"
 
 chcp 65001 >nul 2>&1
 
 echo ================================================
-echo AtivoFrota - Commit e Push para o GitHub
+echo AtivoFrota - GitHub e Firebase Hosting
 echo ================================================
 echo Pasta: %APP_DIR%
 echo.
@@ -87,9 +89,18 @@ git diff --cached --quiet
 if not errorlevel 1 (
     echo.
     echo Nao ha alteracoes novas para criar commit.
-    echo O repositorio ja esta atualizado ou os arquivos nao foram alterados.
-    pause
-    exit /b 0
+    echo O GitHub sera mantido como esta e o Hosting sera atualizado.
+    set "CONFIRM="
+    if /I "%~2"=="/S" (
+        set "CONFIRM=S"
+    ) else (
+        set /p "CONFIRM=Publicar a versao atual no Firebase? Digite S ou N e pressione Enter: "
+    )
+    if /I not "%CONFIRM%"=="S" (
+        echo Operacao cancelada. Nenhuma publicacao foi realizada.
+        exit /b 0
+    )
+    goto confirm_deploy_only
 )
 
 echo.
@@ -100,7 +111,7 @@ set "CONFIRM="
 if /I "%~2"=="/S" (
     set "CONFIRM=S"
 ) else (
-    set /p "CONFIRM=Criar commit e enviar para o GitHub? Digite S ou N e pressione Enter: "
+    set /p "CONFIRM=Criar commit, enviar ao GitHub e publicar no Firebase? Digite S ou N e pressione Enter: "
 )
 if /I not "%CONFIRM%"=="S" (
     echo Operacao cancelada. Nenhuma alteracao foi enviada.
@@ -127,5 +138,35 @@ echo.
 echo Push concluido com sucesso.
 echo Branch: main
 git log -1 --oneline
+
+:confirm_deploy_only
+echo.
+echo Verificando Firebase CLI...
+if exist "%FIREBASE_CLI%" (
+    set "FIREBASE_COMMAND=%FIREBASE_CLI%"
+) else (
+    where firebase.cmd >nul 2>&1
+    if errorlevel 1 (
+        echo ERRO: Firebase CLI nao foi encontrada.
+        echo Instale o Firebase CLI ou execute a instalacao local do projeto.
+        pause
+        exit /b 1
+    )
+    set "FIREBASE_COMMAND=firebase.cmd"
+)
+
+echo Publicando no Firebase Hosting...
+call "%FIREBASE_COMMAND%" deploy --only hosting --project "%FIREBASE_PROJECT%"
+if errorlevel 1 (
+    echo.
+    echo FALHA: o deploy do Firebase nao foi concluido.
+    echo O push do GitHub, se realizado, permanece concluido.
+    pause
+    exit /b 1
+)
+
+echo.
+echo Publicacao concluida com sucesso no GitHub e no Firebase Hosting.
+echo URL: https://ativofrota-imobilizado.web.app/
 pause
 exit /b 0
