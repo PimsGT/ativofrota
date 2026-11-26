@@ -31,8 +31,8 @@ function pendingAssets() { return state.assets.filter((asset) => needsClassifica
 function renderPendingCompanyFilter() { const select=$("#pendingCompanyFilter"); if(!select)return; const current=select.value||"all"; select.innerHTML="<option value=\"all\">Todas as empresas</option>"+state.companies.map((item)=>`<option value=\"${item.id}\">${esc(item.name)}</option>`).join(""); select.value=current; }
 function renderPending() {
   const table = $("#pendingAssetsTable"); if (!table) return;
-  const company = $("#pendingCompanyFilter")?.value || "all"; const issue = $("#pendingIssueFilter")?.value || "all";
-  const rows = pendingAssets().filter((asset) => (company === "all" || asset.company_id === company) && (issue === "all" || (issue === "classification" && needsClassification(asset)) || (issue === "invoice" && !hasInvoice(asset.id)) || (issue === "photo" && !hasPhoto(asset.id))));
+  const company = $("#pendingCompanyFilter")?.value || "all"; const issue = $("#pendingIssueFilter")?.value || "all"; const query = ($("#pendingAssetSearch")?.value || "").trim().toLowerCase();
+  const rows = pendingAssets().filter((asset) => { const searchable = [asset.name, asset.category, asset.brand, asset.model, asset.chassis, asset.operational_location, companyName(asset.company_id)].filter(Boolean).join(" ").toLowerCase(); return (!query || searchable.includes(query)) && (company === "all" || asset.company_id === company) && (issue === "all" || (issue === "classification" && needsClassification(asset)) || (issue === "invoice" && !hasInvoice(asset.id)) || (issue === "photo" && !hasPhoto(asset.id))); });
   $("#pendingAssetsCount").textContent = `${rows.length} pendência(s)`;
   table.innerHTML = rows.map((asset) => `<tr><td>${esc(asset.name)}</td><td>${esc(companyName(asset.company_id))}</td><td><span class="status-pill ${needsClassification(asset) ? "red" : "green"}">${needsClassification(asset) ? "Não" : "Sim"}</span></td><td><span class="status-pill ${hasInvoice(asset.id) ? "green" : "red"}">${hasInvoice(asset.id) ? "Sim" : "Não"}</span></td><td><span class="status-pill ${hasPhoto(asset.id) ? "green" : "red"}">${hasPhoto(asset.id) ? "Sim" : "Não"}</span></td><td><button class="action-link" type="button" data-pending-open="${asset.id}">Abrir ficha</button></td></tr>`).join("") || '<tr><td colspan="6">Nenhum ativo com pendência para os filtros atuais.</td></tr>';
 }
@@ -99,7 +99,7 @@ document.addEventListener("submit", async (event) => {
 }, true);
 
 document.addEventListener("click", (event) => { const button = event.target.closest("[data-pending-open]"); if (!button) return; window.ativoFrotaOpenAssetDetail?.(button.dataset.pendingOpen); });
-$("#pendingCompanyFilter")?.addEventListener("change", renderPending); $("#pendingIssueFilter")?.addEventListener("change", renderPending); $("#movementCompany")?.addEventListener("change", renderMovements); $("#movementType")?.addEventListener("change", () => $("#movementDestinationWrap")?.classList.toggle("hidden", $("#movementType").value !== "transferencia")); $("#movementForm")?.addEventListener("submit", saveMovement);
+$("#pendingCompanyFilter")?.addEventListener("change", renderPending); $("#pendingIssueFilter")?.addEventListener("change", renderPending); $("#pendingAssetSearch")?.addEventListener("input", renderPending); $("#movementCompany")?.addEventListener("change", renderMovements); $("#movementType")?.addEventListener("change", () => $("#movementDestinationWrap")?.classList.toggle("hidden", $("#movementType").value !== "transferencia")); $("#movementForm")?.addEventListener("submit", saveMovement);
 document.addEventListener("DOMContentLoaded", async () => { const { data } = await supabase.auth.getSession(); if (data?.session?.user) await loadData(); });
 document.addEventListener("ativofrota:authenticated", loadData);
 
