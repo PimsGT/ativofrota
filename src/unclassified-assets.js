@@ -119,6 +119,7 @@ function start() {
   $("#classificationForm")?.addEventListener("submit", classifyAsset);
   $("[data-view='unclassified']")?.addEventListener("click", loadData);
   document.addEventListener("ativofrota:authenticated", loadData);
+  document.addEventListener("ativofrota:assets-refreshed", loadData);
   document.addEventListener("ativofrota:supabase-ready", () => {
     if ($("#authGate")?.classList.contains("hidden")) loadData();
   });

@@ -120,6 +120,7 @@ function start() {
     if (remove) { state.files.splice(Number(remove.dataset.pendingRemove), 1); renderQueue(); }
   });
   document.addEventListener("ativofrota:assets-ready", renderAssetOptions);
+  document.addEventListener("ativofrota:assets-refreshed", loadRemotePendingAssets);
   document.addEventListener("ativofrota:authenticated", () => { renderAssetOptions(); loadRemotePendingAssets(); });
   document.addEventListener("ativofrota:supabase-ready", () => { renderAssetOptions(); });
   renderAssetOptions();

@@ -90,6 +90,7 @@ async function saveMovement(event) {
 }
 
 document.addEventListener("ativofrota:asset-detail-opened", (event) => loadAssetDocuments(event.detail?.id));
+document.addEventListener("ativofrota:assets-refreshed", loadData);
 document.addEventListener("submit", async (event) => {
   if (event.target.id !== "assetDocumentForm") return;
   event.preventDefault(); event.stopImmediatePropagation(); const asset = state.assets.find((item) => item.id === event.target.dataset.assetId); const nf = event.target.querySelector("[name='assetNf']")?.files?.[0]; const photos = [...(event.target.querySelector("[name='assetPhotos']")?.files || [])];
