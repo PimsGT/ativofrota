@@ -5,8 +5,8 @@ const BUCKET = "ativos-documentos";
 const state = { assets: [], companies: [], documents: [] };
 const esc = (value) => { const node = document.createElement("div"); node.textContent = value ?? ""; return node.innerHTML; };
 const toast = (message) => { const node = $("#toast"); if (!node) return; node.textContent = message; node.classList.add("show"); setTimeout(() => node.classList.remove("show"), 2800); };
-const isPhoto = (doc) => String(doc.document_type || "").toLowerCase().includes("foto") || /\.(jpg|jpeg|png|webp)$/i.test(doc.file_name || "");
-const isInvoice = (doc) => !isPhoto(doc);
+const isPhoto = (doc) => String(doc.document_type || "").toLowerCase() === "foto";
+const isInvoice = (doc) => ["aquisicao", "inclusao"].includes(String(doc.document_type || "").toLowerCase());
 
 async function loadData() {
   const [{ data: assets, error: assetError }, { data: companies, error: companyError }] = await Promise.all([
@@ -71,8 +71,9 @@ async function loadAssetDocuments(assetId) {
   const { data, error } = await supabase.from("asset_documents").select("id,file_name,storage_path,document_type,created_at").eq("asset_id", assetId).order("created_at", { ascending: false });
   const container = $("#assetDocuments"); if (!container) return;
   if (error) { container.innerHTML = '<small>Não foi possível carregar os documentos.</small>'; return; }
-  container.innerHTML = (data || []).map((doc) => { const typeLabel = doc.document_type === "aquisicao" || doc.document_type === "inclusao" ? "Inclusão" : doc.document_type === "foto" ? "Foto" : doc.document_type === "movimentacao" ? "Movimentação" : (doc.document_type || "Documento"); return `<div class="uploaded-document"><div class="uploaded-document-info"><strong class="uploaded-document-name">${esc(doc.file_name)}</strong><small class="uploaded-document-meta">${typeLabel} · incluído em ${new Date(doc.created_at).toLocaleDateString("pt-BR")}</small></div><button type="button" class="text-btn" data-download-document="${doc.id}">Abrir</button></div>`; }).join("") || '<small>Nenhum documento ou foto anexado.</small>';
+  container.innerHTML = (data || []).map((doc) => { const typeLabel = doc.document_type === "aquisicao" || doc.document_type === "inclusao" ? "NF / Inclusão" : doc.document_type === "foto" ? "Foto do veículo" : doc.document_type === "movimentacao" ? "Movimentação" : (doc.document_type || "Documento"); return `<div class="uploaded-document"><div class="uploaded-document-info"><strong class="uploaded-document-name">${esc(doc.file_name)}</strong><small class="uploaded-document-meta">${typeLabel} · incluído em ${new Date(doc.created_at).toLocaleDateString("pt-BR")}</small></div><div class="uploaded-document-actions"><button type="button" class="text-btn" data-download-document="${doc.id}">Abrir</button><button type="button" class="text-btn danger-text" data-delete-document="${doc.id}">Remover</button></div></div>`; }).join("") || '<small>Nenhum documento ou foto anexado.</small>';
   container.querySelectorAll("[data-download-document]").forEach((button) => button.addEventListener("click", async () => { const doc = (data || []).find((item) => item.id === button.dataset.downloadDocument); const { data: signed, error: signedError } = await supabase.storage.from(BUCKET).createSignedUrl(doc.storage_path, 3600); if (signedError) toast("Não foi possível abrir o arquivo."); else window.open(signed.signedUrl, "_blank", "noopener"); }));
+  container.querySelectorAll("[data-delete-document]").forEach((button) => button.addEventListener("click", async () => { const doc = (data || []).find((item) => item.id === button.dataset.deleteDocument); if (!doc || !window.confirm(`Remover o anexo "${doc.file_name}"?`)) return; button.disabled = true; const { error: deleteError } = await supabase.from("asset_documents").delete().eq("id", doc.id); if (deleteError) { button.disabled = false; toast(deleteError.message || "Não foi possível remover o registro do anexo."); return; } const { error: storageError } = await supabase.storage.from(BUCKET).remove([doc.storage_path]); if (storageError) { toast("Registro removido, mas o arquivo físico não pôde ser removido."); console.error(storageError); } else toast("Anexo removido."); await loadAssetDocuments(assetId); await loadData(); }));
 }
 
 async function saveMovement(event) {

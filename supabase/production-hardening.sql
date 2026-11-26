@@ -74,6 +74,21 @@ with check (
   )
 );
 
+drop policy if exists "Usuários removem documentos autorizados" on public.asset_documents;
+create policy "Usuários removem documentos autorizados"
+on public.asset_documents for delete to authenticated
+using (
+  public.is_master()
+  or exists (
+    select 1
+    from public.assets a
+    join public.user_companies uc
+      on uc.company_id = coalesce(a.current_company_id, a.company_id)
+     and uc.user_id = auth.uid()
+    where a.id = asset_documents.asset_id
+  )
+);
+
 -- Bucket privado: os arquivos só devem ser acessados por URLs assinadas emitidas pelo app.
 insert into storage.buckets (id, name, public) values ('ativos-documentos', 'ativos-documentos', false) on conflict (id) do update set public = false;
 
@@ -145,6 +160,14 @@ with check (
     public.can_access_asset_storage(name)
     or (name like 'imports/%' and exists (select 1 from public.profiles p where p.id = auth.uid() and p.active = true))
   )
+);
+
+drop policy if exists "Usuários autorizados removem documentos" on storage.objects;
+create policy "Usuários autorizados removem documentos"
+on storage.objects for delete to authenticated
+using (
+  bucket_id = 'ativos-documentos'
+  and public.can_access_asset_storage(name)
 );
 
 -- O app trabalha com o tamanho máximo de 25 MB; a validação também deve ser mantida no bucket/proxy escolhido.
