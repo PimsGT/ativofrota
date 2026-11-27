@@ -95,7 +95,7 @@ document.addEventListener("submit", async (event) => {
   if (event.target.id !== "assetDocumentForm") return;
   event.preventDefault(); event.stopImmediatePropagation(); const asset = state.assets.find((item) => item.id === event.target.dataset.assetId); const nf = event.target.querySelector("[name='assetNf']")?.files?.[0]; const photos = [...(event.target.querySelector("[name='assetPhotos']")?.files || [])];
   if (!asset) return toast("Ativo não encontrado.");
-  try { if (nf) await uploadDocument(asset, nf, "aquisicao"); for (const photo of photos) await uploadDocument(asset, photo, "foto"); toast("Documentos anexados ao ativo."); await loadAssetDocuments(asset.id); await loadData(); } catch (error) { console.error(error); toast(error.message || "Não foi possível anexar os arquivos."); }
+  try { if (nf) await uploadDocument(asset, nf, "aquisicao"); for (const photo of photos) await uploadDocument(asset, photo, "foto"); toast("Documentos anexados ao ativo."); await loadAssetDocuments(asset.id); await loadData(); document.dispatchEvent(new CustomEvent("ativofrota:documents-updated", { detail: { assetId: asset.id } })); } catch (error) { console.error(error); toast(error.message || "Não foi possível anexar os arquivos."); }
 }, true);
 
 document.addEventListener("click", (event) => { const button = event.target.closest("[data-pending-open]"); if (!button) return; window.ativoFrotaOpenAssetDetail?.(button.dataset.pendingOpen); });
